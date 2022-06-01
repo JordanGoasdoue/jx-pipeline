@@ -198,6 +198,7 @@ func createPipelineActivityName(pa *v1.PipelineActivity) string {
 
 // GetRunningBuildLogs obtains the logs of the provided PipelineActivity and streams the running build pods' logs using the provided LogWriter
 func (t *TektonLogger) GetRunningBuildLogs(ctx context.Context, pa *v1.PipelineActivity, pipelineRuns []*tektonapis.PipelineRun, buildName string) <-chan LogLine {
+	log.Logger().Infof("GetRunningBuildLogs called for buildName %s", buildName)
 	ch := make(chan LogLine)
 	go func() {
 		defer close(ch)
@@ -206,6 +207,7 @@ func (t *TektonLogger) GetRunningBuildLogs(ctx context.Context, pa *v1.PipelineA
 			t.err = err
 		}
 	}()
+	log.Logger().Infof("GetRunningBuildLogs => buildName %s: return ch")
 	return ch
 }
 
@@ -218,6 +220,7 @@ type stageTime struct {
 }
 
 func (t *TektonLogger) getRunningBuildLogs(ctx context.Context, pa *v1.PipelineActivity, pipelineRuns []*tektonapis.PipelineRun, buildName string, out chan<- LogLine) error {
+	log.Logger().Infof("getRunningBuildLogs called for buildName %s", buildName)
 	loggedAllRunsForActivity := false
 	foundLogs := false
 	completedStages := map[string]bool{}
@@ -232,6 +235,7 @@ func (t *TektonLogger) getRunningBuildLogs(ctx context.Context, pa *v1.PipelineA
 		for _, stage := range stages {
 			podName := stage.podName
 			stageName := stage.task
+			log.Logger().Infof("getRunningBuildLogs: buildname %s => stageName is %s", buildName, stageName)
 			if completedStages[stageName] {
 				continue
 			}
@@ -254,10 +258,13 @@ func (t *TektonLogger) getRunningBuildLogs(ctx context.Context, pa *v1.PipelineA
 					return errors.Wrapf(err, "failed to get logs for pod %s", podName)
 				}
 
+				log.Logger().Infof("WaitForPodNameToBeComplete will be called for buildName %s", buildName)
+
 				err = pods.WaitForPodNameToBeComplete(t.KubeClient, t.Namespace, podName, 1*time.Second)
 				if err == nil {
 					completedStages[podName] = true
 				}
+				log.Logger().Infof("WaitForPodNameToBeComplete is called for buildName %s", buildName)
 
 			} else if stage.skipped {
 				completedStages[stageName] = true
@@ -355,6 +362,7 @@ func findExecutedOrSkippedStagesStage(taskName string, pr *tektonapis.PipelineRu
 }
 
 func (t *TektonLogger) getContainerLogsFromPod(ctx context.Context, pod *corev1.Pod, pa *v1.PipelineActivity, buildName, stageName string, out chan<- LogLine) error {
+	log.Logger().Infof("getContainerLogsFromPod: buildname is %s and stageName is %s", buildName, stageName)
 	infoColor := color.New(color.FgGreen)
 	infoColor.EnableColor()
 	errorColor := color.New(color.FgRed)
@@ -389,6 +397,7 @@ func (t *TektonLogger) getContainerLogsFromPod(ctx context.Context, pod *corev1.
 }
 
 func (t *TektonLogger) fetchLogsToChannel(ctx context.Context, pod *corev1.Pod, container *corev1.Container, out chan<- LogLine) error {
+	log.Logger().Infof("fetchLogsToChannel: pod %s and container %s", pod.Name, container.Name)
 	logsRetrieverFunc := t.LogsRetrieverFunc
 	if logsRetrieverFunc == nil {
 		logsRetrieverFunc = retrieveLogsFromPod
@@ -398,6 +407,7 @@ func (t *TektonLogger) fetchLogsToChannel(ctx context.Context, pod *corev1.Pod, 
 		return err
 	}
 	defer reader.Close()
+	log.Logger().Infof("writeStreamLines: pod %s and container %s", pod.Name, container.Name)
 	return writeStreamLines(reader, out)
 }
 
@@ -429,6 +439,7 @@ func hasStepFailed(ctx context.Context, pod *corev1.Pod, stepNumber int, kubeCli
 }
 
 func (t *TektonLogger) waitForContainerToStart(ctx context.Context, ns string, pod *corev1.Pod, idx int, stageName string, out chan<- LogLine) (*corev1.Pod, error) {
+	log.Logger().Infof("waitForContainerToStart: stageName is %s", stageName)
 	if pod.Status.Phase == corev1.PodFailed {
 		return pod, nil
 	}
@@ -455,6 +466,7 @@ func (t *TektonLogger) waitForContainerToStart(ctx context.Context, ns string, p
 		if pods.HasContainerStarted(p, idx) {
 			return p, nil
 		}
+		log.Logger().Infof("waitForContainerToStart: for loop => stageName %s - containers from pod %s not started", p.Name)
 	}
 }
 
